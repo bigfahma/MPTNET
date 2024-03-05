@@ -1,0 +1,100 @@
+{
+    "test": [
+        {
+            "image": [
+                "bone_data/images_nifti_test_75/bone_B42L_6.nii.gz"
+            ],
+            "label": "bone_data/masks_nifti_test_75/mask_B42L_6.nii.gz"
+        },
+        {
+            "image": [
+                "bone_data/images_nifti_test_75/bone_B42L_7.nii.gz"
+            ],
+            "label": "bone_data/masks_nifti_test_75/mask_B42L_7.nii.gz"
+        },
+        {
+            "image": [
+                "bone_data/images_nifti_test_75/bone_B42R_6.nii.gz"
+            ],
+            "label": "bone_data/masks_nifti_test_75/mask_B42R_6.nii.gz"
+        },
+        {
+            "image": [
+                "bone_data/images_nifti_test_75/bone_B42R_7.nii.gz"
+            ],
+            "label": "bone_data/masks_nifti_test_75/mask_B42R_7.nii.gz"
+        },
+        {
+            "image": [
+                "bone_data/images_nifti_test_75/bone_B43L_6.nii.gz"
+            ],
+            "label": "bone_data/masks_nifti_test_75/mask_B43L_6.nii.gz"
+        },
+        {
+            "image": [
+                "bone_data/images_nifti_test_75/bone_B43L_7.nii.gz"
+            ],
+            "label": "bone_data/masks_nifti_test_75/mask_B43L_7.nii.gz"
+        },
+        {
+            "image": [
+                "bone_data/images_nifti_test_75/bone_B43R_6.nii.gz"
+            ],
+            "label": "bone_data/masks_nifti_test_75/mask_B43R_6.nii.gz"
+        },
+        {
+            "image": [
+                "bone_data/images_nifti_test_75/bone_B43R_7.nii.gz"
+            ],
+            "label": "bone_data/masks_nifti_test_75/mask_B43R_7.nii.gz"
+        },
+        {
+            "image": [
+                "bone_data/images_nifti_test_75/bone_B44L_6.nii.gz"
+            ],
+            "label": "bone_data/masks_nifti_test_75/mask_B44L_6.nii.gz"
+        },
+        {
+            "image": [
+                "bone_data/images_nifti_test_75/bone_B44L_7.nii.gz"
+            ],
+            "label": "bone_data/masks_nifti_test_75/mask_B44L_7.nii.gz"
+        },
+        {
+            "image": [
+                "bone_data/images_nifti_test_75/bone_B44R_6.nii.gz"
+            ],
+            "label": "bone_data/masks_nifti_test_75/mask_B44R_6.nii.gz"
+        },
+        {
+            "image": [
+                "bone_data/images_nifti_test_75/bone_B44R_7.nii.gz"
+            ],
+            "label": "bone_data/masks_nifti_test_75/mask_B44R_7.nii.gz"
+        },
+        {
+            "image": [
+                "bone_data/images_nifti_test_75/bone_B45L_6.nii.gz"
+            ],
+            "label": "bone_data/masks_nifti_test_75/mask_B45L_6.nii.gz"
+        },
+        {
+            "image": [
+                "bone_data/images_nifti_test_75/bone_B45L_7.nii.gz"
+            ],
+            "label": "bone_data/masks_nifti_test_75/mask_B45L_7.nii.gz"
+        },
+        {
+            "image": [
+                "bone_data/images_nifti_test_75/bone_B45R_6.nii.gz"
+            ],
+            "label": "bone_data/masks_nifti_test_75/mask_B45R_6.nii.gz"
+        },
+        {
+            "image": [
+                "bone_data/images_nifti_test_75/bone_B45R_7.nii.gz"
+            ],
+            "label": "bone_data/masks_nifti_test_75/mask_B45R_7.nii.gz"
+        }
+    ]
+}

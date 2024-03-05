@@ -1,0 +1,27 @@
+{
+    "train": [
+        {
+            "image": [
+                "bone_data/images_nifti_split/bone_1L_0.nii.gz"
+            ],
+            "label": "bone_data/masks_nifti_split/mask_1L_0.nii.gz"
+        }
+        
+        ],
+    "val": [
+        {
+            "image": [
+                "bone_data/images_nifti_split/bone_B33R_2.nii.gz"
+            ],
+            "label": "bone_data/masks_nifti_split/mask_B33R_2.nii.gz"
+        },
+    ],
+    "test": [
+        {
+            "image": [
+                "bone_data/images_nifti_split/bone_B42L_6.nii.gz"
+            ],
+            "label": "bone_data/masks_nifti_split/mask_B42L_6.nii.gz"
+        },
+    ]
+    }
