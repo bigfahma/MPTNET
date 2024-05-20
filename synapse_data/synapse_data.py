@@ -18,12 +18,52 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pyvista as pv
 from torch.utils.data.dataloader import default_collate
+from monai.transforms import Transform
 
 
 set_determinism(seed=1)
 with open('synapse_data/data_synapse.json') as f:
     data = json.load(f)
 train_files, val_files, test_files = data['train'], data['val'], data['test']
+
+
+def one_hot_to_class_map(one_hot_labels):
+    """
+    Convert one-hot encoded labels to class mapping.
+
+    Args:
+    - one_hot_labels (numpy.ndarray): One-hot encoded labels with shape (C, N, H, W),
+                                      where C is the number of classes (9 in this case),
+                                      N is the number of images,
+                                      H is the height, and W is the width.
+
+    Returns:
+    - numpy.ndarray: Array with shape (N, H, W), where each pixel value represents the class index.
+    """
+    # Argmax operation along the class dimension (0) to get the class index for each pixel
+    class_map = np.argmax(one_hot_labels, axis=0)
+    return class_map
+
+class LogShape(Transform):
+    """
+    Custom transform to log the shape of image and label tensors.
+    """
+    def __call__(self, data):
+        for key in data.keys():
+            if key in ['image', 'label']:
+                print(f"{key} shape: {data[key].shape}")
+        return data
+
+
+class ReorderDims(Transform):
+    """
+    Reorder the dimensions of the image and label to ensure (Depth, Height, Width).
+    """
+    def __call__(self, data):
+        d = dict(data)
+        for key in ['image', 'label']:
+            d[key] = d[key].transpose(-3, -1).transpose(-2, -1)  # Assuming original order is HWD
+        return d
 
 
 class ConvertToMultiChannelForSYNAPSEClassesd(MapTransform):
@@ -46,13 +86,14 @@ def get_train_dataloader():
     train_transform = Compose(
         [
             LoadImaged(keys=["image", "label"]),
+            ReorderDims(),
             ConvertToMultiChannelForSYNAPSEClassesd(keys = ['label']),
             AddChanneld(keys = ["image"]),
             RandCropByPosNegLabeld(
                 keys=["image", "label"],
                 label_key="label",
                 spatial_size=(32, 384, 384), # MIN (Z,X,Y) : 85 500 500
-                pos = 0.9, neg = 0.1),    
+                pos = 0.4, neg = 0.1),    
             RandFlipd(keys = ["image", "label"],
                       prob = 0.5,
                       spatial_axis = 0),
@@ -63,7 +104,7 @@ def get_train_dataloader():
                 keys = ["image"],
                 gamma = (0.5, 4.5),
             ),
-            RandScaleIntensityd(keys = "image", prob = 1, factors = 0.1),
+            RandScaleIntensityd(keys = "image", prob = 0.4, factors = 0.1),
             NormalizeIntensityd(keys = "image",
                                 nonzero = True,
                                 channel_wise = True),
@@ -71,25 +112,21 @@ def get_train_dataloader():
         ]
     )
     train_ds = Dataset(data=train_files, transform=train_transform)
-    train_loader = DataLoader(train_ds, batch_size=4, shuffle=True, num_workers = 4, 
+    train_loader = DataLoader(train_ds, batch_size=2, shuffle=True, num_workers = 8, 
                               pin_memory = True,  )
 
 
     return train_loader
-
-
-
 def get_val_dataloader():
+    #largest_size = (11, 256, 256)
     val_transform = Compose(
         [
             LoadImaged(keys=["image", "label"]),
+            ReorderDims(),
             ConvertToMultiChannelForSYNAPSEClassesd(keys = ['label']),
-            AddChanneld(keys = ["image"]), 
-            RandCropByPosNegLabeld(
-                keys=["image", "label"],
-                label_key="label",
-                spatial_size=(32, 384, 384), # MIN (Z,X,Y) : 85 500 500
-                pos = 0.9),  
+            AddChanneld(keys = ["image"]),
+            SpatialPadd(keys=["image", "label"], spatial_size=(32, 384, 384)),  
+            RandScaleIntensityd(keys = "image", prob = 0.4, factors = 0.1),
             NormalizeIntensityd(keys = "image",
                                nonzero = True,
                                channel_wise = True),
@@ -97,17 +134,20 @@ def get_val_dataloader():
         ]
     )
     val_ds = Dataset(data=val_files, transform=val_transform)
-    val_loader = DataLoader(val_ds, batch_size=4, shuffle=False, num_workers = 4, 
-                            pin_memory = True)
+    val_loader = DataLoader(val_ds, batch_size = 1, shuffle=False, num_workers = 0,  
+                            pin_memory = True)#drop_last = True
 
     return val_loader
 
 def get_test_dataloader():
+    #largest_size = (11, 256, 256)
     test_transform = Compose(
         [
             LoadImaged(keys=["image", "label"]),
+            ReorderDims(),
             ConvertToMultiChannelForSYNAPSEClassesd(keys = ['label']),
             AddChanneld(keys = ["image"]),
+            SpatialPadd(keys=["image", "label"], spatial_size=(32, 384, 384)),
             NormalizeIntensityd(keys = "image",
                                nonzero = True,
                                channel_wise = True),
@@ -118,7 +158,6 @@ def get_test_dataloader():
     test_loader = DataLoader(test_ds, batch_size=1, shuffle=False)
 
     return test_loader
-
 def get_combined_train_val_dataloader():
     combined_files = train_files + val_files
 
@@ -175,26 +214,28 @@ def explore_data_loader(data_loader, loader_name):
             print(f"  Image {i} shape: {np_image.shape}")
             print(f"  Label {i} shape: {np_label.shape}")
             print(f"  Unique values in label {i}: {np.unique(np_label)}")
-            plot = True
+            arg_label = one_hot_to_class_map(np_label)
+            print(np.unique(arg_label))
+            #visualize_multiple_images_np([np_image[0], arg_label])
 
-            if plot :
-                slice_idx = np_image.shape[-1] // 2
-                plt.figure(figsize=(12, 6))
-                plt.subplot(1, 10, 1)
-                plt.imshow(np_image[0, :, :, slice_idx], cmap='gray')
-                plt.title(f"Image {i} Slice")
-                for j in range(np_label.shape[0]):
-                    plt.subplot(1, 10, j + 2)
-                    plt.imshow(np_label[j, :, :, slice_idx], cmap='gray')
-                    plt.title(f"Label {i} Class {j} Slice")
-                plt.show()
+            # if plot :
+            #     slice_idx = np_image.shape[-1] // 2
+            #     plt.figure(figsize=(12, 6))
+            #     plt.subplot(1, 10, 1)
+            #     plt.imshow(np_image[0, :, :, slice_idx], cmap='gray')
+            #     plt.title(f"Image {i} Slice")
+            #     for j in range(np_label.shape[0]):
+            #         plt.subplot(1, 10, j + 2)
+            #         plt.imshow(np_label[j, :, :, slice_idx], cmap='gray')
+            #         plt.title(f"Label {i} Class {j} Slice")
+            #     plt.show()
 
 def explore_all_data():
-    train_loader = get_train_dataloader()
+    #train_loader = get_train_dataloader()
     val_loader = get_val_dataloader()
     test_loader = get_test_dataloader()
 
-    explore_data_loader(train_loader, "Training Data")
+    #explore_data_loader(train_loader, "Training Data")
     explore_data_loader(val_loader, "Validation Data")
     explore_data_loader(test_loader, "Test Data")
 

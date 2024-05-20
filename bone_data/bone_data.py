@@ -1,4 +1,4 @@
-from monai.utils import set_determinism
+#from monai.utils import set_determinism
 from monai.transforms import (
     Compose,
     LoadImaged,
@@ -9,79 +9,77 @@ from monai.transforms import (
     ToTensord,
     AddChanneld,
     MapTransform,
-    Affined,
-    Rand3DElasticd,
     RandAdjustContrastd,
-    # RandShiftIntensityd,
-    # Orientationd,
-    # ScaleIntensityRanged,
-    # SpatialPadd,
-    # CropForegroundd,
-    # RandSpatialCropSamplesd,
-    
+    SpatialPadd,
+    Rand3DElasticd,
+    RandAffined,
+
 
 )   
 from monai.data import DataLoader, Dataset
 import json
 import numpy as np
 import matplotlib.pyplot as plt
-import pyvista as pv
+from monai.transforms import Transform
 
 
-set_determinism(seed=1)
-with open('bone_data/data_bone_08_15_split.json') as f:
+#set_determinism(seed=2) # 555
+with open('bone_data/data_bone.json') as f:
     data = json.load(f)
 train_files, val_files, test_files = data['train'], data['val'], data['test']
 
 
-class PrintShape:
+def one_hot_to_class_map(one_hot_labels):
+    """
+    Convert one-hot encoded labels to class mapping.
+
+    Args:
+    - one_hot_labels (numpy.ndarray): One-hot encoded labels with shape (C, N, H, W),
+                                      where C is the number of classes (9 in this case),
+                                      N is the number of images,
+                                      H is the height, and W is the width.
+
+    Returns:
+    - numpy.ndarray: Array with shape (N, H, W), where each pixel value represents the class index.
+    """
+    # Argmax operation along the class dimension (0) to get the class index for each pixel
+    class_map = np.argmax(one_hot_labels, axis=0)
+    return class_map
+
+class LogShape(Transform):
+    """
+    Custom transform to log the shape of image and label tensors.
+    """
     def __call__(self, data):
-        print(f"Image shape: {data['image'].shape}")
-        print(f"Label shape: {data['label'].shape}")
+        for key in data.keys():
+            if key in ['image', 'label']:
+                print(f"{key} shape: {data[key].shape}")
         return data
 
-class DataViewImage:
-    def __call__(self,data):
-        print(np.array(data["image"][0]).shape)
-        return data
-class DataViewLabel:
-    def __call__(self,data):
-        pv.plot(np.array(data["label"][0]))
-        pv.plot(np.array(data["label"][1]))
-        pv.plot(np.array(data["label"][2]))
-        return data
 
-class RemapLabels(MapTransform):
-    def __init__(self, keys, map_dict):
-        super().__init__(keys)
-        self.map_dict = map_dict
-
+class ReorderDims(Transform):
+    """
+    Reorder the dimensions of the image and label to ensure (Depth, Height, Width).
+    """
     def __call__(self, data):
         d = dict(data)
-        for key in self.keys:
-            d[key] = self.map_dict.get(d[key], d[key])
+        for key in ['image', 'label']:
+            d[key] = d[key].transpose(-3, -1).transpose(-2, -1)  # Assuming original order is HWD
         return d
 
-class ConvertToMultiChannelForBoneClassesd(MapTransform):
+
+
+class ConvertToMultiChannelForBONEClassesd(MapTransform):
 
     def __call__(self, data):
         d = dict(data)
         for key in self.keys:
             result = []
             result.append(d[key] == 0)
-            
-            # Cortical class
             result.append(d[key] == 1)
-            
-            # Trabecular class
             result.append(d[key] == 2)
-            # Stack the results
-            multi_channel_label = np.stack(result, axis=0).astype(np.float32)
-            ### verification ####
 
-            # pv.plot(np.array(multi_channel_label[0]))
-            # pv.plot(np.array(multi_channel_label[1]))
-            # pv.plot(np.array(multi_channel_label[2]))
+            multi_channel_label = np.stack(result, axis=0).astype(np.float32)
             d[key] = multi_channel_label
             
         return d
@@ -91,32 +89,45 @@ def get_train_dataloader():
     train_transform = Compose(
         [
             LoadImaged(keys=["image", "label"]),
-            #PrintShape(),
-            ConvertToMultiChannelForBoneClassesd(keys = ['label']),
+            ReorderDims(),
+            ConvertToMultiChannelForBONEClassesd(keys = ['label']),
             AddChanneld(keys = ["image"]),
-            #PrintShape(),
+            SpatialPadd(keys=["image", "label"], spatial_size=(32, 320, 320)),
             RandCropByPosNegLabeld(
                 keys=["image", "label"],
                 label_key="label",
-                spatial_size=(320,320,32),
-                pos = 1,neg=0),             
-                
+                spatial_size=(32, 320, 320),
+                pos = 0.6),   
+            Rand3DElasticd(
+                keys=["image", "label"],
+                sigma_range=(9, 13),
+                magnitude_range=(0, 900),
+                prob=0.2,
+                rotate_range=(0, 0, 0), 
+                shear_range=None,
+                translate_range=None,
+                scale_range=None,
+                mode=('bilinear', 'nearest'),
+                padding_mode='border'
+            ),
+            RandAffined(
+                keys=["image", "label"],
+                prob=0.2,
+                rotate_range=(0, 0, 0),
+                scale_range=(0.85, 1.25),
+                mode=('bilinear', 'nearest')
+            ), 
             RandFlipd(keys = ["image", "label"],
                       prob = 0.5,
                       spatial_axis = 0),
              RandFlipd(keys = ["image", "label"],
                       prob = 0.5,
                       spatial_axis = 1),
-             #Affined( keys = ["image","label"],
-             #       rotate_params = np.pi/4, 
-             #       #shear_params= (0.2, 0.1),
-             #       translate_params= (50,50),
-             #       ),
             RandAdjustContrastd(
                 keys = ["image"],
                 gamma = (0.5, 4.5),
             ),
-            RandScaleIntensityd(keys = "image", prob = 1, factors = 0.1),
+            RandScaleIntensityd(keys = "image", prob = 0.4, factors = 0.1),
             NormalizeIntensityd(keys = "image",
                                 nonzero = True,
                                 channel_wise = True),
@@ -124,25 +135,22 @@ def get_train_dataloader():
         ]
     )
     train_ds = Dataset(data=train_files, transform=train_transform)
-    train_loader = DataLoader(train_ds, batch_size=2, shuffle=True, num_workers = 4, pin_memory = True, )
+    train_loader = DataLoader(train_ds, batch_size=8, shuffle=True, num_workers = 4, 
+                              pin_memory = True,  )
 
 
     return train_loader
 
 def get_val_dataloader():
+    #largest_size = (11, 256, 256)
     val_transform = Compose(
         [
             LoadImaged(keys=["image", "label"]),
-            ConvertToMultiChannelForBoneClassesd(keys = ['label']),
+            ReorderDims(),
+            ConvertToMultiChannelForBONEClassesd(keys = ['label']),
             AddChanneld(keys = ["image"]),
-            #DataViewImage(),
-            RandCropByPosNegLabeld(
-                keys=["image", "label"],
-                label_key="label",
-                spatial_size=(320,320,32),
-                pos = 1,neg=0),
-            #DataViewImage(),
-            #DataViewLabel(),
+            SpatialPadd(keys=["image", "label"], spatial_size=(32, 320, 320)),  
+            RandScaleIntensityd(keys = "image", prob = 0.4, factors = 0.1),
             NormalizeIntensityd(keys = "image",
                                nonzero = True,
                                channel_wise = True),
@@ -150,7 +158,8 @@ def get_val_dataloader():
         ]
     )
     val_ds = Dataset(data=val_files, transform=val_transform)
-    val_loader = DataLoader(val_ds, batch_size=2, shuffle=False, num_workers = 4, drop_last = True, pin_memory = True,)
+    val_loader = DataLoader(val_ds, batch_size = 1, shuffle=False, num_workers = 0,  
+                            pin_memory = True)#drop_last = True
 
     return val_loader
 
@@ -158,13 +167,9 @@ def get_test_dataloader():
     test_transform = Compose(
         [
             LoadImaged(keys=["image", "label"]),
-            ConvertToMultiChannelForBoneClassesd(keys = ['label']),
+            ReorderDims(),
+            ConvertToMultiChannelForBONEClassesd(keys = ['label']),
             AddChanneld(keys = ["image"]),
-            RandCropByPosNegLabeld(
-                keys=["image", "label"],
-                label_key="label",
-                spatial_size = (320,320,32),
-                pos = 1,neg=0),
             NormalizeIntensityd(keys = "image",
                                nonzero = True,
                                channel_wise = True),
@@ -175,4 +180,3 @@ def get_test_dataloader():
     test_loader = DataLoader(test_ds, batch_size=1, shuffle=False)
 
     return test_loader
-

@@ -3,7 +3,59 @@ import torch
 import numpy as np
 from timm.models.layers import DropPath, to_3tuple, trunc_normal_
 import torch.nn.functional as F
+from monai.networks.blocks import Convolution, ResidualUnit
+class UpsampleConvUnit(nn.Module):
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        spatial_dims = 3,
+        strides=2,
+        up_kernel_size=3,
+        kernel_size=3,
+        act="relu",
+        norm="batch",
+        dropout=0.0,
+        bias=True,
+        adn_ordering="ADN",
+        padding = None
+    ):
+        super(UpsampleConvUnit, self).__init__()
 
+        self.conv = Convolution(
+            spatial_dims=spatial_dims,
+            in_channels=in_channels,
+            out_channels=out_channels,
+            strides=strides,
+            kernel_size=up_kernel_size,
+            act=act,
+            norm=norm,
+            dropout=dropout,
+            bias=bias,
+            is_transposed=True,
+            adn_ordering=adn_ordering,
+            padding = padding
+        )
+        
+        self.ru = ResidualUnit(
+            spatial_dims=spatial_dims,
+            in_channels=out_channels,
+            out_channels=out_channels,
+            strides=1,
+            kernel_size=kernel_size,
+            subunits=1,
+            act=act,
+            norm=norm,
+            dropout=dropout,
+            bias=bias,
+            adn_ordering=adn_ordering,
+            padding = padding
+        )
+        self.conv = nn.Sequential(self.conv, self.ru)
+
+    def forward(self, x):
+        return self.conv(x)
+    
 
 class ContiguousGrad(torch.autograd.Function):
     @staticmethod

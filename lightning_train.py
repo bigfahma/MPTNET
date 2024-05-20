@@ -5,7 +5,6 @@ from pytorch_lightning.loggers import TensorBoardLogger
 import argparse
 import torch
 
-
 if __name__ =="__main__":
 
     
@@ -14,7 +13,7 @@ if __name__ =="__main__":
         print(torch.cuda.get_device_properties(i).name)
     parser = argparse.ArgumentParser()
     parser.add_argument('--exp', type=str, required=True)
-    parser.add_argument('--dataset', type=str, choices=list(["ACDC","SYNAPSE", "UNET_ACDC"]),default="SYNAPSE", help="Choose a database from the list: [ACDC, SYNAPSE, UNET_ACDC]") 
+    parser.add_argument('--dataset', type=str, choices=list(["ACDC","SYNAPSE", "BONE"]),default="SYNAPSE", help="Choose a database from the list: [ACDC, SYNAPSE, BONE]") 
     args = parser.parse_args()
 
     if args.dataset == "SYNAPSE":
@@ -23,16 +22,29 @@ if __name__ =="__main__":
     elif args.dataset == "ACDC":
         from trainer_acdc_mptnet import MPTNET_ACDC
         model = MPTNET_ACDC()
-    elif args.dataset == "UNET_ACDC":
-        from trainer_acdc_unet import ACDCUNET
-        model = ACDCUNET()
+    elif args.dataset == "BONE":
+        from trainer_bone_mptnet import MPTNET_BONE
+        model = MPTNET_BONE()
 
         
     print("Training ...")
+    ckpt_dir = f'ckpt/{args.exp}/'
+    log_dir = f'logs/{args.exp}/'
+    if not os.path.exists('ckpt/{}/'.format(args.exp)):
+        os.makedirs('ckpt/{}/'.format(args.exp), exist_ok=True)
+        print("Created directory:", 'ckpt/{}/'.format(args.exp))
+    else:
+        print("Directory already exists:", 'ckpt/{}/'.format(args.exp))
+
+    if not os.path.exists('logs/{}/'.format(args.exp)):
+        os.makedirs('logs/{}/'.format(args.exp), exist_ok=True)
+        print("Created directory:", 'logs/{}/'.format(args.exp))
+    else:
+        print("Directory already exists:", 'logs/{}/'.format(args.exp))
 
     checkpoint_callback = ModelCheckpoint(
         monitor='val/MeanDiceScore',
-        dirpath='./ckpt/{}'.format(args.exp),
+        dirpath=ckpt_dir,
         filename='Epoch{epoch:3d}-MeanDiceScore{val/MeanDiceScore:.4f}',
         save_top_k=3,
         mode='max',
@@ -40,26 +52,27 @@ if __name__ =="__main__":
         auto_insert_metric_name=False
     )
     early_stop_callback = EarlyStopping(
-    monitor='val/val_loss',
-    min_delta=0.0001,
-    patience=50,
+    monitor='val/MeanDiceScore',
+    min_delta=0.0001, # 0.001, 1e-5
+    patience=150, # 100, 50, 25
     verbose=True,
-    mode='max'
+    mode='max'  
     )
     tensorboardlogger = TensorBoardLogger(
-        'logs',
-        name = args.exp,
-        default_hp_metric = None
+        save_dir=log_dir,
+        name='',
+        default_hp_metric=None
     )
     trainer = pl.Trainer(
                           accelerator='gpu',
-                          devices= "auto",
-                            precision=16,
-                            min_epochs=2000,
-                            max_epochs = 3500,
-                            callbacks=[ checkpoint_callback, early_stop_callback ],
-                            num_sanity_val_steps=4,
+                           devices = [4,5,6,7],
+                            precision=16, #mixed
+                            min_epochs=700,
+                            max_epochs = 1500, 
+                            callbacks=[ checkpoint_callback, early_stop_callback],
+                            num_sanity_val_steps=2,
                             logger = tensorboardlogger,
-                            accumulate_grad_batches= 4,
+                            check_val_every_n_epoch = 1,
+                            accumulate_grad_batches= 2, # 1
                             )
     trainer.fit(model)
